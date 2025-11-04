@@ -1,0 +1,680 @@
+openapi: 3.0.4
+info:
+  title: Biblioteca NubeTec API
+  description: API REST para gestión de biblioteca - consulta de catálogo, préstamos y reservas
+  version: 1.0.0
+  contact:
+    name: ITQ Distributed and Cloud Systems
+    email: ivonne.al@queretaro.tecnm.mx
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Servidor de desarrollo
+  - url: https://api.bibliotecanubetec.com/api/v1
+    description: Servidor de producción
+
+tags:
+  - name: libros
+    description: Operaciones relacionadas con el catálogo de libros
+  - name: usuarios
+    description: Operaciones relacionadas con usuarios
+  - name: prestamos
+    description: Operaciones relacionadas con préstamos
+  - name: reservas
+    description: Operaciones relacionadas con reservas
+
+paths:
+  /libros:
+    get:
+      summary: Consultar catálogo de libros
+      description: Busca libros en el catálogo por diferentes criterios
+      operationId: consultarLibros
+      tags:
+        - libros
+      parameters:
+        - name: isbn
+          in: query
+          description: ISBN del libro
+          required: false
+          schema:
+            type: string
+            minLength: 10
+            maxLength: 13
+          example: "978-0123456789"
+        - name: titulo
+          in: query
+          description: Título del libro (búsqueda parcial)
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          example: "Programación Java"
+        - name: autor
+          in: query
+          description: Autor del libro (búsqueda parcial)
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          example: "James Gosling"
+        - name: categoria
+          in: query
+          description: Categoría del libro
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+          example: "Programación"
+      responses:
+        '200':
+          description: Lista de libros encontrados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibroList'
+              example:
+                libros:
+                  - isbn: "978-0123456789"
+                    titulo: "Programación Java Avanzada"
+                    autor: "James Gosling"
+                    categoria: "Programación"
+                    ejemplaresTotales: 5
+                    ejemplaresDisponibles: 3
+                  - isbn: "978-9876543210"
+                    titulo: "Spring Boot en Acción"
+                    autor: "Craig Walls"
+                    categoria: "Programación"
+                    ejemplaresTotales: 3
+                    ejemplaresDisponibles: 1
+                total: 2
+        '400':
+          description: Parámetros de búsqueda inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /usuarios:
+    post:
+      summary: Registrar nuevo usuario
+      description: Da de alta un nuevo usuario en el sistema
+      operationId: registrarUsuario
+      tags:
+        - usuarios
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioInput'
+            example:
+              nombre: "Juan Pérez"
+              tipo: "ESTUDIANTE"
+      responses:
+        '201':
+          description: Usuario registrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+              example:
+                usuariold: "USR-001"
+                nombre: "Juan Pérez"
+                tipo: "ESTUDIANTE"
+                fechaRegistro: "2024-01-15T10:30:00Z"
+        '400':
+          description: Datos de usuario inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Usuario ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+    get:
+      summary: Consultar usuarios
+      description: Busca usuarios por diferentes criterios
+      operationId: consultarUsuarios
+      tags:
+        - usuarios
+      parameters:
+        - name: usuariold
+          in: query
+          description: ID del usuario
+          required: false
+          schema:
+            type: string
+            pattern: '^USR-[0-9]{3}$'
+          example: "USR-001"
+        - name: nombre
+          in: query
+          description: Nombre del usuario (búsqueda parcial)
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          example: "Juan"
+        - name: tipo
+          in: query
+          description: Tipo de usuario
+          required: false
+          schema:
+            type: string
+            enum: [ESTUDIANTE, DOCENTE]
+          example: "ESTUDIANTE"
+      responses:
+        '200':
+          description: Lista de usuarios encontrados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsuarioList'
+        '400':
+          description: Parámetros de búsqueda inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /usuarios/{usuariold}/historial:
+    get:
+      summary: Consultar historial de préstamos
+      description: Obtiene el historial de préstamos de un usuario específico
+      operationId: consultarHistorialUsuario
+      tags:
+        - usuarios
+      parameters:
+        - name: usuariold
+          in: path
+          description: ID del usuario
+          required: true
+          schema:
+            type: string
+            pattern: '^USR-[0-9]{3}$'
+          example: "USR-001"
+      responses:
+        '200':
+          description: Historial de préstamos del usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrestamoList'
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /prestamos:
+    post:
+      summary: Crear nuevo préstamo
+      description: Registra un nuevo préstamo de libro
+      operationId: crearPrestamo
+      tags:
+        - prestamos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrestamoInput'
+            example:
+              usuariold: "USR-001"
+              isbnLibro: "978-0123456789"
+      responses:
+        '201':
+          description: Préstamo creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prestamo'
+              example:
+                prestamold: "PRS-001"
+                usuariold: "USR-001"
+                isbnLibro: "978-0123456789"
+                fechaPrestamo: "2024-01-15T10:30:00Z"
+                fechaDevolucionPrevista: "2024-01-29T10:30:00Z"
+                estado: "ACTIVO"
+        '400':
+          description: Datos de préstamo inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Usuario o libro no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: No hay ejemplares disponibles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /prestamos/{prestamold}/devolver:
+    put:
+      summary: Devolver préstamo
+      description: Marca un préstamo como devuelto
+      operationId: devolverPrestamo
+      tags:
+        - prestamos
+      parameters:
+        - name: prestamold
+          in: path
+          description: ID del préstamo a devolver
+          required: true
+          schema:
+            type: string
+            pattern: '^PRS-[0-9]{3}$'
+          example: "PRS-001"
+      responses:
+        '200':
+          description: Préstamo devuelto exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prestamo'
+              example:
+                prestamold: "PRS-001"
+                usuariold: "USR-001"
+                isbnLibro: "978-0123456789"
+                fechaPrestamo: "2024-01-15T10:30:00Z"
+                fechaDevolucionPrevista: "2024-01-29T10:30:00Z"
+                fechaDevolucionReal: "2024-01-25T14:20:00Z"
+                estado: "DEVUELTO"
+        '404':
+          description: Préstamo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Préstamo ya devuelto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /prestamos/{prestamold}/renovar:
+    put:
+      summary: Renovar préstamo
+      description: Extiende la fecha de un préstamo activo (si no existen reservas pendientes)
+      operationId: renovarPrestamo
+      tags:
+        - prestamos
+      parameters:
+        - name: prestamold
+          in: path
+          description: ID del préstamo a renovar
+          required: true
+          schema:
+            type: string
+            pattern: '^PRS-[0-9]{3}$'
+          example: "PRS-001"
+      responses:
+        '200':
+          description: Préstamo renovado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prestamo'
+              example:
+                prestamold: "PRS-001"
+                usuariold: "USR-001"
+                isbnLibro: "978-0123456789"
+                fechaPrestamo: "2024-01-15T10:30:00Z"
+                fechaDevolucionPrevista: "2024-02-12T10:30:00Z"
+                estado: "RENOVADO"
+        '404':
+          description: Préstamo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: No se puede renovar - existen reservas pendientes o préstamo no activo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /reservas:
+    post:
+      summary: Crear nueva reserva
+      description: Crea una reserva para un libro sin ejemplares disponibles
+      operationId: crearReserva
+      tags:
+        - reservas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservaInput'
+            example:
+              usuariold: "USR-002"
+              isbnLibro: "978-9876543210"
+      responses:
+        '201':
+          description: Reserva creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+              example:
+                reservald: "RES-001"
+                usuariold: "USR-002"
+                isbnLibro: "978-9876543210"
+                fechaReserva: "2024-01-15T11:00:00Z"
+                estado: "PENDIENTE"
+        '400':
+          description: Datos de reserva inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Usuario o libro no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Ya existe una reserva activa o hay ejemplares disponibles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+components:
+  schemas:
+    Libro:
+      type: object
+      description: Información de un libro en el catálogo
+      required:
+        - isbn
+        - titulo
+        - autor
+        - categoria
+        - ejemplaresTotales
+        - ejemplaresDisponibles
+      properties:
+        isbn:
+          type: string
+          description: ISBN único del libro
+          minLength: 10
+          maxLength: 13
+          example: "978-0123456789"
+        titulo:
+          type: string
+          description: Título del libro
+          maxLength: 255
+          example: "Programación Java Avanzada"
+        autor:
+          type: string
+          description: Autor del libro
+          maxLength: 255
+          example: "James Gosling"
+        categoria:
+          type: string
+          description: Categoría del libro
+          maxLength: 100
+          example: "Programación"
+        ejemplaresTotales:
+          type: integer
+          description: Número total de ejemplares
+          minimum: 0
+          example: 5
+        ejemplaresDisponibles:
+          type: integer
+          description: Número de ejemplares disponibles para préstamo
+          minimum: 0
+          example: 3
+
+    LibroList:
+      type: object
+      description: Lista de libros encontrados
+      properties:
+        libros:
+          type: array
+          items:
+            $ref: '#/components/schemas/Libro'
+          description: Array de libros
+        total:
+          type: integer
+          description: Total de libros encontrados
+          example: 2
+
+    UsuarioInput:
+      type: object
+      description: Datos para registrar un nuevo usuario
+      required:
+        - nombre
+        - tipo
+      properties:
+        nombre:
+          type: string
+          description: Nombre completo del usuario
+          minLength: 1
+          maxLength: 255
+          example: "Juan Pérez"
+        tipo:
+          type: string
+          description: Tipo de usuario
+          enum: [ESTUDIANTE, DOCENTE]
+          example: "ESTUDIANTE"
+
+    Usuario:
+      type: object
+      description: Información de un usuario registrado
+      required:
+        - usuariold
+        - nombre
+        - tipo
+        - fechaRegistro
+      properties:
+        usuariold:
+          type: string
+          description: ID único del usuario
+          pattern: '^USR-[0-9]{3}$'
+          example: "USR-001"
+        nombre:
+          type: string
+          description: Nombre completo del usuario
+          maxLength: 255
+          example: "Juan Pérez"
+        tipo:
+          type: string
+          description: Tipo de usuario
+          enum: [ESTUDIANTE, DOCENTE]
+          example: "ESTUDIANTE"
+        fechaRegistro:
+          type: string
+          format: date-time
+          description: Fecha y hora de registro
+          example: "2024-01-15T10:30:00Z"
+
+    UsuarioList:
+      type: object
+      description: Lista de usuarios encontrados
+      properties:
+        usuarios:
+          type: array
+          items:
+            $ref: '#/components/schemas/Usuario'
+          description: Array de usuarios
+        total:
+          type: integer
+          description: Total de usuarios encontrados
+          example: 1
+
+    PrestamoInput:
+      type: object
+      description: Datos para crear un nuevo préstamo
+      required:
+        - usuariold
+        - isbnLibro
+      properties:
+        usuariold:
+          type: string
+          description: ID del usuario
+          pattern: '^USR-[0-9]{3}$'
+          example: "USR-001"
+        isbnLibro:
+          type: string
+          description: ISBN del libro a prestar
+          minLength: 10
+          maxLength: 13
+          example: "978-0123456789"
+
+    Prestamo:
+      type: object
+      description: Información de un préstamo
+      required:
+        - prestamold
+        - usuariold
+        - isbnLibro
+        - fechaPrestamo
+        - fechaDevolucionPrevista
+        - estado
+      properties:
+        prestamold:
+          type: string
+          description: ID único del préstamo
+          pattern: '^PRS-[0-9]{3}$'
+          example: "PRS-001"
+        usuariold:
+          type: string
+          description: ID del usuario
+          pattern: '^USR-[0-9]{3}$'
+          example: "USR-001"
+        isbnLibro:
+          type: string
+          description: ISBN del libro prestado
+          minLength: 10
+          maxLength: 13
+          example: "978-0123456789"
+        fechaPrestamo:
+          type: string
+          format: date-time
+          description: Fecha y hora del préstamo
+          example: "2024-01-15T10:30:00Z"
+        fechaDevolucionPrevista:
+          type: string
+          format: date-time
+          description: Fecha límite para devolución
+          example: "2024-01-29T10:30:00Z"
+        fechaDevolucionReal:
+          type: string
+          format: date-time
+          description: Fecha real de devolución (si aplica)
+          example: "2024-01-25T14:20:00Z"
+        estado:
+          type: string
+          description: Estado del préstamo
+          enum: [ACTIVO, DEVUELTO, RENOVADO]
+          example: "ACTIVO"
+
+    PrestamoList:
+      type: object
+      description: Lista de préstamos
+      properties:
+        prestamos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Prestamo'
+          description: Array de préstamos
+        total:
+          type: integer
+          description: Total de préstamos encontrados
+          example: 1
+
+    ReservaInput:
+      type: object
+      description: Datos para crear una nueva reserva
+      required:
+        - usuariold
+        - isbnLibro
+      properties:
+        usuariold:
+          type: string
+          description: ID del usuario
+          pattern: '^USR-[0-9]{3}$'
+          example: "USR-002"
+        isbnLibro:
+          type: string
+          description: ISBN del libro a reservar
+          minLength: 10
+          maxLength: 13
+          example: "978-9876543210"
+
+    Reserva:
+      type: object
+      description: Información de una reserva
+      required:
+        - reservald
+        - usuariold
+        - isbnLibro
+        - fechaReserva
+        - estado
+      properties:
+        reservald:
+          type: string
+          description: ID único de la reserva
+          pattern: '^RES-[0-9]{3}$'
+          example: "RES-001"
+        usuariold:
+          type: string
+          description: ID del usuario
+          pattern: '^USR-[0-9]{3}$'
+          example: "USR-002"
+        isbnLibro:
+          type: string
+          description: ISBN del libro reservado
+          minLength: 10
+          maxLength: 13
+          example: "978-9876543210"
+        fechaReserva:
+          type: string
+          format: date-time
+          description: Fecha y hora de la reserva
+          example: "2024-01-15T11:00:00Z"
+        estado:
+          type: string
+          description: Estado de la reserva
+          enum: [PENDIENTE, COMPLETADA, CANCELADA]
+          example: "PENDIENTE"
+
+    ApiError:
+      type: object
+      description: Respuesta de error estándar
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Código de error
+          example: "LIBRO_NO_ENCONTRADO"
+        message:
+          type: string
+          description: Mensaje de error legible
+          example: "El libro con el ISBN proporcionado no existe en el catálogo"
+        details:
+          type: string
+          description: Detalles adicionales del error
+          example: "ISBN: 978-0000000000"
