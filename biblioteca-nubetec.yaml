@@ -1,0 +1,362 @@
+openapi: 3.0.4
+info:
+  title: Biblioteca NubeTec API
+  description: API REST para gestión de préstamos y reservas de biblioteca universitaria
+  version: 1.0.0
+  contact:
+    name: ITQ Distributed and Cloud Systems
+    email: ivonne.al@queretaro.tecnm.mx
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Servidor de desarrollo local
+  - url: https://api.nubetec.com/api/v1
+    description: Servidor de producción
+
+tags:
+  - name: usuarios
+    description: Operaciones relacionadas con registro y consulta de usuarios
+  - name: prestamos
+    description: Operaciones relacionadas con préstamos de libros
+  - name: reservas
+    description: Operaciones relacionadas con reservas de libros
+  - name: catalogo
+    description: Operaciones para consultar libros disponibles
+
+paths:
+  /usuarios:
+    post:
+      summary: Registrar nuevo usuario
+      description: Crea un nuevo usuario de tipo ESTUDIANTE o DOCENTE
+      operationId: registrarUsuario
+      tags:
+        - usuarios
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Usuario'
+            example:
+              nombre: "Marcelo Cabello"
+              tipo: "ESTUDIANTE"
+      responses:
+        '201':
+          description: Usuario registrado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '400':
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /prestamos:
+    post:
+      summary: Crear préstamo
+      description: Registra un nuevo préstamo de un libro disponible
+      operationId: crearPrestamo
+      tags:
+        - prestamos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrestamoRequest'
+            example:
+              usuarioId: 101
+              isbnLibro: "9780131103627"
+      responses:
+        '201':
+          description: Préstamo creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prestamo'
+        '409':
+          description: No hay ejemplares disponibles del libro solicitado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /prestamos/{prestamoId}/devolver:
+    post:
+      summary: Devolver libro prestado
+      description: Marca un préstamo como devuelto
+      operationId: devolverPrestamo
+      tags:
+        - prestamos
+      parameters:
+        - name: prestamoId
+          in: path
+          description: ID único del préstamo
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Préstamo devuelto correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prestamo'
+        '404':
+          description: Préstamo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /prestamos/{prestamoId}/renovar:
+    post:
+      summary: Renovar préstamo
+      description: Extiende la fecha de un préstamo activo si no existen reservas pendientes
+      operationId: renovarPrestamo
+      tags:
+        - prestamos
+      parameters:
+        - name: prestamoId
+          in: path
+          description: ID del préstamo a renovar
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Préstamo renovado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prestamo'
+        '409':
+          description: No se puede renovar, existen reservas pendientes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Préstamo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /reservas:
+    post:
+      summary: Crear reserva
+      description: Crea una reserva para un libro sin ejemplares disponibles
+      operationId: crearReserva
+      tags:
+        - reservas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservaRequest'
+            example:
+              usuarioId: 101
+              isbnLibro: "9780131103627"
+      responses:
+        '201':
+          description: Reserva creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '409':
+          description: El libro aún tiene ejemplares disponibles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /catalogo:
+    get:
+      summary: Consultar catálogo
+      description: Devuelve una lista de libros registrados y su disponibilidad
+      operationId: consultarCatalogo
+      tags:
+        - catalogo
+      parameters:
+        - name: titulo
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "Fundamentos de Bases de Datos"
+        - name: autor
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "Silberschatz"
+      responses:
+        '200':
+          description: Lista de libros encontrados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibroList'
+        '404':
+          description: No se encontraron libros
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+components:
+  schemas:
+    Libro:
+      type: object
+      description: Información de un libro en el sistema
+      required: [isbn, titulo, autor, categoria, ejemplaresTotales, ejemplaresDisponibles]
+      properties:
+        isbn:
+          type: string
+          description: Identificador único del libro
+          example: "9780131103627"
+        titulo:
+          type: string
+          description: Título del libro
+          example: "El Arte de la Programación"
+        autor:
+          type: string
+          description: Nombre del autor
+          example: "Donald Knuth"
+        categoria:
+          type: string
+          description: Categoría del libro
+          example: "Ciencia de la Computación"
+        ejemplaresTotales:
+          type: integer
+          description: Total de ejemplares físicos
+          example: 10
+        ejemplaresDisponibles:
+          type: integer
+          description: Número de ejemplares actualmente disponibles
+          example: 3
+
+    LibroList:
+      type: object
+      properties:
+        libros:
+          type: array
+          items:
+            $ref: '#/components/schemas/Libro'
+        total:
+          type: integer
+          example: 2
+
+    Usuario:
+      type: object
+      description: Información de usuario registrado
+      required: [nombre, tipo]
+      properties:
+        usuarioId:
+          type: integer
+          example: 101
+        nombre:
+          type: string
+          example: "Marcelo Cabello"
+        tipo:
+          type: string
+          enum: [ESTUDIANTE, DOCENTE]
+          example: "ESTUDIANTE"
+
+    PrestamoRequest:
+      type: object
+      description: Solicitud para crear un préstamo
+      required: [usuarioId, isbnLibro]
+      properties:
+        usuarioId:
+          type: integer
+          example: 101
+        isbnLibro:
+          type: string
+          example: "9780131103627"
+
+    Prestamo:
+      type: object
+      description: Representa un préstamo de libro
+      required: [prestamoId, isbnLibro, usuarioId, fechaPrestamo, fechaDevolucionPrevista, estado]
+      properties:
+        prestamoId:
+          type: integer
+          example: 5001
+        isbnLibro:
+          type: string
+          example: "9780131103627"
+        usuarioId:
+          type: integer
+          example: 101
+        fechaPrestamo:
+          type: string
+          format: date
+          example: "2025-10-13"
+        fechaDevolucionPrevista:
+          type: string
+          format: date
+          example: "2025-10-20"
+        estado:
+          type: string
+          enum: [ACTIVO, DEVUELTO, RENOVADO]
+          example: "ACTIVO"
+
+    ReservaRequest:
+      type: object
+      required: [usuarioId, isbnLibro]
+      properties:
+        usuarioId:
+          type: integer
+          example: 101
+        isbnLibro:
+          type: string
+          example: "9780131103627"
+
+    Reserva:
+      type: object
+      required: [reservaId, isbnLibro, usuarioId, fechaReserva, estado]
+      properties:
+        reservaId:
+          type: integer
+          example: 3001
+        isbnLibro:
+          type: string
+          example: "9780131103627"
+        usuarioId:
+          type: integer
+          example: 101
+        fechaReserva:
+          type: string
+          format: date
+          example: "2025-10-13"
+        estado:
+          type: string
+          enum: [PENDIENTE, COMPLETADA]
+          example: "PENDIENTE"
+
+    ApiError:
+      type: object
+      description: Estructura de error estándar
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: "NOT_FOUND"
+        message:
+          type: string
+          example: "El recurso solicitado no fue encontrado"
+        details:
+          type: string
+          example: "El préstamo con ID especificado no existe"
